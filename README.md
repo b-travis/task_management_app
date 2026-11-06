@@ -73,7 +73,7 @@ Browser → nginx (port 3000) → Flask + Gunicorn (port 5000)
 
 ## Tests
 
-The backend tests cover every endpoint and error case. They run outside Docker and need [uv](https://docs.astral.sh/uv/):
+The backend tests cover each endpoint and the main error cases. They run outside Docker and need [uv](https://docs.astral.sh/uv/):
 
 ```bash
 cd backend
@@ -137,7 +137,7 @@ Then open http://localhost:5173. The Vite development server forwards `/api` req
 - If adding a task fails, the typed text stays in the box so it can be resubmitted.
 - If saving a dragged task fails, the list returns to its saved order.
 
-**In nginx:** testing showed the page hanging for 30 seconds or more when the backend stopped, because nginx kept trying the backend's old network address. nginx now looks the address up again and gives up quickly, so the error appears in about 3 seconds and the app recovers when the backend returns.
+**In nginx:** testing showed the page hanging for 30 seconds or more when the backend stopped, because nginx kept trying the backend's old network address. nginx now looks the address up again and gives up quickly, so the error appears within about 3 seconds and the app recovers when the backend returns.
 
 ### What tests would you write if given more time?
 
