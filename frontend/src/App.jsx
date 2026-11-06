@@ -9,9 +9,11 @@ import {
   moveTask,
   updateTask,
 } from './api'
+import FilterBar from './components/FilterBar'
 import Stats from './components/Stats'
 import TaskForm from './components/TaskForm'
 import TaskList from './components/TaskList'
+import { NO_FILTERS, matchesFilters, withoutUnusedTag } from './filters'
 
 // Puts a task at a new position among the tasks at its level, matching what the
 // backend does, so a drop can show on screen before the backend has answered.
@@ -28,6 +30,8 @@ function App() {
   const [tags, setTags] = useState([])
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [chosenFilters, setChosenFilters] = useState(NO_FILTERS)
+  const filters = withoutUnusedTag(chosenFilters, tags)
 
   const refresh = useCallback(() => {
     return Promise.all([getTasks(), getStats(), getTags()])
@@ -113,7 +117,25 @@ function App() {
 
       {tasks === null && !error && <p className="message">Loading tasks…</p>}
 
-      {tasks !== null && <TaskList tasks={tasks} busy={busy} actions={actions} />}
+      {tasks?.length > 0 && (
+        <FilterBar
+          filters={filters}
+          tags={tags}
+          shownCount={tasks.filter((task) => matchesFilters(task, filters)).length}
+          totalCount={tasks.length}
+          onChange={setChosenFilters}
+        />
+      )}
+
+      {tasks !== null && (
+        <TaskList
+          tasks={tasks}
+          filters={filters}
+          busy={busy}
+          actions={actions}
+          onClearFilters={() => setChosenFilters(NO_FILTERS)}
+        />
+      )}
     </main>
   )
 }

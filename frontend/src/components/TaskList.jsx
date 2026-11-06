@@ -3,15 +3,27 @@ import { CSS } from '@dnd-kit/utilities'
 import { useState } from 'react'
 import EditPanel from './EditPanel'
 import SortableList from './SortableList'
+import { isFiltering, matchesFilters } from '../filters'
 import { STATUSES } from '../status'
 import TaskForm from './TaskForm'
 
-function TaskItem({ task, subTasks = [], mainTasks, busy, actions }) {
+// subTasks holds every sub-task, so rules such as the delete confirmation count
+// the ones filters are hiding. shownSubTasks holds the ones to display.
+function TaskItem({
+  task,
+  subTasks = [],
+  shownSubTasks = [],
+  mainTasks,
+  dimmed = false,
+  canDrag,
+  busy,
+  actions,
+}) {
   const [editing, setEditing] = useState(false)
   const [addingSubTask, setAddingSubTask] = useState(false)
   const isMainTask = task.parent_id === null
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
-    useSortable({ id: task.id, disabled: busy })
+    useSortable({ id: task.id, disabled: busy || !canDrag })
 
   async function handleAddSubTask(subTask) {
     const added = await actions.add({ ...subTask, parent_id: task.id })
@@ -32,20 +44,22 @@ function TaskItem({ task, subTasks = [], mainTasks, busy, actions }) {
   return (
     <li
       ref={setNodeRef}
-      className={`task${task.completed ? ' completed' : ''}${isDragging ? ' dragging' : ''}`}
+      className={`task${task.completed ? ' completed' : ''}${isDragging ? ' dragging' : ''}${dimmed ? ' dimmed' : ''}`}
       style={{ transform: CSS.Translate.toString(transform), transition }}
     >
       <div className="task-row">
-        <button
-          ref={setActivatorNodeRef}
-          type="button"
-          className="drag-handle"
-          {...attributes}
-          {...listeners}
-          aria-label={`Reorder ${task.title}`}
-        >
-          ⠿
-        </button>
+        {canDrag && (
+          <button
+            ref={setActivatorNodeRef}
+            type="button"
+            className="drag-handle"
+            {...attributes}
+            {...listeners}
+            aria-label={`Reorder ${task.title}`}
+          >
+            ⠿
+          </button>
+        )}
         <div className="task-text">
           <span className="task-title">{task.title}</span>
           <div className="task-meta">
@@ -126,13 +140,14 @@ function TaskItem({ task, subTasks = [], mainTasks, busy, actions }) {
         </div>
       )}
 
-      {subTasks.length > 0 && (
-        <SortableList items={subTasks} className="sub-task-list" onReorder={actions.reorder}>
-          {subTasks.map((subTask) => (
+      {shownSubTasks.length > 0 && (
+        <SortableList items={shownSubTasks} className="sub-task-list" onReorder={actions.reorder}>
+          {shownSubTasks.map((subTask) => (
             <TaskItem
               key={subTask.id}
               task={subTask}
               mainTasks={mainTasks}
+              canDrag={canDrag}
               busy={busy}
               actions={actions}
             />
@@ -143,22 +158,43 @@ function TaskItem({ task, subTasks = [], mainTasks, busy, actions }) {
   )
 }
 
-function TaskList({ tasks, busy, actions }) {
+function TaskList({ tasks, filters, busy, actions, onClearFilters }) {
   if (tasks.length === 0) {
     return <p className="message">No tasks yet. Add one above to get started.</p>
   }
 
   // The API returns a flat list, so nest sub-tasks under their main task here.
   const mainTasks = tasks.filter((task) => task.parent_id === null)
+  const subTasksOf = (task) => tasks.filter((other) => other.parent_id === task.id)
+  const matches = (task) => matchesFilters(task, filters)
+
+  // A main task shows if it matches, or to give context to a sub-task that does.
+  const shownMainTasks = mainTasks.filter(
+    (task) => matches(task) || subTasksOf(task).some(matches),
+  )
+
+  if (shownMainTasks.length === 0) {
+    return (
+      <div className="message">
+        <p>No tasks match these filters.</p>
+        <button type="button" onClick={onClearFilters}>
+          Clear filters
+        </button>
+      </div>
+    )
+  }
 
   return (
-    <SortableList items={mainTasks} className="task-list" onReorder={actions.reorder}>
-      {mainTasks.map((task) => (
+    <SortableList items={shownMainTasks} className="task-list" onReorder={actions.reorder}>
+      {shownMainTasks.map((task) => (
         <TaskItem
           key={task.id}
           task={task}
-          subTasks={tasks.filter((other) => other.parent_id === task.id)}
+          subTasks={subTasksOf(task)}
+          shownSubTasks={subTasksOf(task).filter(matches)}
           mainTasks={mainTasks}
+          dimmed={!matches(task)}
+          canDrag={!isFiltering(filters)}
           busy={busy}
           actions={actions}
         />
