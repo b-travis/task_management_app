@@ -1,6 +1,6 @@
 # Extensions: Making the App More Interesting
 
-This is the plan for five new features. The README's final answers are parked until these are done.
+This is the plan for the app's new features. Round 1 (features 1 to 5) is built and on GitHub. Round 2 (features 6 and 7) is [planned below](#round-2-completion-status-and-filters) and not built yet. The README's final answers are parked until these are done.
 
 **The goal:** add these within about an hour without breaking anything the prompt requires.
 
@@ -196,11 +196,113 @@ That's about 70 minutes, before you write the README answers. If time runs short
 - Add decisions 1 to 8 to the assumptions, trimmed down to the ones that matter.
 - Update the "extra hour" answer so it doesn't list anything you've already built.
 
+## Round 2: Completion status and filters
+
+**The ground rule still applies:** the prompt's `completed` true/false field, `PUT /tasks/<id>/complete`, and the `total`, `completed`, and `pending` stats all keep working as written.
+
+### Decisions needed
+
+These are recommendations and haven't been agreed yet.
+
+| # | Question | Recommendation | Why |
+|---|---|---|---|
+| 9 | How does the new status fit with the required `completed` field? | **`status` becomes the real value, and `completed` is worked out from it.** `completed` is true only when the status is Completed. | The two can never disagree, and the prompt's API keeps working. |
+| 10 | What does "pending" mean now? | **Anything not Completed**: Not Started, In Progress, and Blocked. | Keeps the required stat correct, and the page can show the split under it. |
+| 11 | Does the Complete button stay? | **Yes, next to a status dropdown** that replaces the Pending/Completed text. | The prompt requires a complete button, and it's the quickest way to finish a task. |
+| 12 | Does setting a main task to Completed through the dropdown complete its sub-tasks? | **Yes**, the same as the Complete button (decision 3). Other statuses don't affect sub-tasks. | One rule, however a task gets completed. |
+| 13 | What happens when a completed task is reopened? | **Allowed.** A reopened main task leaves its sub-tasks as they are. | This adds the undo the app didn't have. Restoring earlier sub-task statuses would mean remembering them. |
+| 14 | What if a sub-task is reopened under a completed main task? | **The main task moves to In Progress.** | Follows decision 3: a finished task shouldn't have open work under it. |
+| 15 | Does each filter allow one value or several? | **One value each, with "All" as the default.** | Three simple dropdowns are quick to build and easy to use. |
+| 16 | How do filters combine? | **A task must match all of them**, such as P0 and Blocked. | This is what people usually expect, and it's how you'd narrow a list. |
+| 17 | What happens when only a sub-task matches? | **Its main task shows too, dimmed, for context.** Sub-tasks that don't match are hidden. | An indented sub-task with no main task above it would be confusing. |
+| 18 | Do the stats follow the filters? | **No**, they always count every task. A "Showing 3 of 9" line covers the filtered view. | The stats stay consistent, and they already come from the API. |
+| 19 | Can tasks be dragged while filters are on? | **No.** The drag handles are hidden until filters are cleared. | With tasks hidden, a drop position is ambiguous and could save the wrong order. |
+| 20 | Where does filtering happen? | **In the browser**, with no backend change. | The page already has every task, so results are instant and `GET /tasks` stays as the prompt describes. Server-side filtering would matter with a real database and far more tasks. |
+
+### 6. Completion status
+
+**What you'll be able to do**
+- Set each task to Not Started, In Progress, Blocked, or Completed from a dropdown on the task.
+- Reopen a completed task.
+- See how pending tasks split across the three open statuses.
+
+**How it works**
+- Each task gets a `status` field holding `not_started`, `in_progress`, `blocked`, or `completed`. New tasks start as `not_started`.
+- `POST /tasks` accepts an optional `status`, and `PATCH /tasks/<id>` can change it. Anything else returns a 400.
+- `PUT /tasks/<id>/complete` sets the status to `completed`.
+- Internally, the backend stores only `status` and adds `completed` when it sends a task back.
+- `/tasks/stats` gains `not_started`, `in_progress`, and `blocked`. The **Pending** card shows that split under its number, as **Completed** does for main and sub-tasks.
+- Each status gets a color from the Carbon Arc palette. Strikethrough stays for Completed.
+
+A task will look like this:
+
+```json
+{
+  "id": 2,
+  "title": "Draft the intro",
+  "completed": false,
+  "status": "blocked",
+  "priority": "P1",
+  "tag": "Work",
+  "parent_id": 1
+}
+```
+
+### 7. Filters
+
+**What you'll be able to do**
+- Filter by tag, including a "No tag" option.
+- Filter by priority.
+- Filter by completion status.
+- Use any combination, and reset them with **Clear filters**.
+
+**How it works**
+- A filter bar sits between the add-task form and the list.
+- Tag choices come from the existing `GET /tags`.
+- If nothing matches, the page says "No tasks match these filters" with a **Clear filters** button.
+- If the tag being filtered on stops being used, that filter returns to "All", so the list doesn't stay empty for no visible reason.
+- A new task that doesn't match the current filters won't appear until they change. The "Showing" count updates, so it's clear the task was added.
+- Filters reset when the page is refreshed.
+
+```text
+Tag [All ▾]   Priority [All ▾]   Status [All ▾]   Clear filters
+Showing 3 of 9 tasks
+
+⠿ Write report   [P0] [Work]   [In Progress ▾]   + Sub-task  Complete  Edit  Delete
+```
+
+### Build order
+
+| Step | Work | Rough time |
+|---|---|---|
+| 1 | Status in the backend, with tests | 15 min |
+| 2 | Status dropdown, colors, and the Pending split | 15 min |
+| 3 | Filter bar and nested filter rules | 20 min |
+| 4 | Docker check and README update | 10 min |
+
+That's about 60 minutes. Status goes first because the status filter depends on it. Each step ends with a commit, and if time runs short, filters can be cut without affecting status.
+
+### Testing
+
+- **Backend:** cover valid and invalid statuses, `completed` always matching `status`, the `/complete` endpoint, decisions 12 to 14, and the new stats. Tests that check exact task fields or stats need the new fields added.
+- **Browser:** cover each filter alone and combined, a sub-task match showing its dimmed main task, hidden drag handles, the empty message, and the disappearing-tag case.
+- **Isolation:** run browser checks on a separate test backend, so they can't touch a running Docker app.
+
+### README updates
+
+- Add both features, the new `status` field, and the new stats.
+- Add the agreed decisions to the assumptions.
+- Remove "undo a completion" and "filters" from the "extra hour" answer, because they'd be built. Add "filtering in the API" only if you'd really pick it.
+
+---
+
 ## Out of scope for now
 
-- Filtering or searching by tag or priority.
+- Text search.
+- Selecting several values in one filter.
+- Saving filters across page refreshes.
 - Sub-tasks within sub-tasks.
 - Dragging a task onto another to nest it.
 - Multiple tags per task, or tag renaming and colors.
-- Undo for completing or deleting.
+- Undo for deleting.
 - Saving tasks across backend restarts.

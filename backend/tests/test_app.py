@@ -42,6 +42,7 @@ def test_create_task(client):
         "id": 1,
         "title": "Write report",
         "completed": False,
+        "status": "not_started",
         "priority": "P2",
         "tag": None,
         "parent_id": None,
@@ -112,7 +113,7 @@ def test_complete_task(client):
     response = client.put(f"/tasks/{task['id']}/complete")
 
     assert response.status_code == 200
-    assert response.get_json() == {**task, "completed": True}
+    assert response.get_json() == {**task, "completed": True, "status": "completed"}
     assert client.get("/tasks").get_json()[0]["completed"] is True
 
 
@@ -167,6 +168,9 @@ def test_stats_when_empty(client):
         "pending": 0,
         "main_completed": 0,
         "sub_completed": 0,
+        "not_started": 0,
+        "in_progress": 0,
+        "blocked": 0,
     }
 
 
@@ -185,6 +189,9 @@ def test_stats_track_changes(client):
         "pending": 1,
         "main_completed": 1,
         "sub_completed": 0,
+        "not_started": 1,
+        "in_progress": 0,
+        "blocked": 0,
     }
 
 
@@ -499,7 +506,159 @@ def test_stats_count_main_and_sub_tasks_separately(client):
         "pending": 1,
         "main_completed": 1,
         "sub_completed": 2,
+        "not_started": 1,
+        "in_progress": 0,
+        "blocked": 0,
     }
+
+
+def get_task(client, task_id):
+    tasks = client.get("/tasks").get_json()
+    return next(task for task in tasks if task["id"] == task_id)
+
+
+def set_status(client, task_id, status):
+    return client.patch(f"/tasks/{task_id}", json={"status": status})
+
+
+def test_create_task_with_status(client):
+    response = client.post("/tasks", json={"title": "Task", "status": "blocked"})
+
+    assert response.status_code == 201
+    assert response.get_json()["status"] == "blocked"
+    assert response.get_json()["completed"] is False
+
+
+@pytest.mark.parametrize("status", ["Blocked", "done", "", None, 1])
+def test_invalid_status_is_rejected(client, status):
+    task = add_task(client)
+
+    responses = [
+        client.post("/tasks", json={"title": "Task", "status": status}),
+        set_status(client, task["id"], status),
+    ]
+
+    for response in responses:
+        assert response.status_code == 400
+        assert response.get_json() == {
+            "error": "Status must be one of: not_started, in_progress, blocked, completed"
+        }
+
+
+@pytest.mark.parametrize(
+    "status, completed",
+    [
+        ("not_started", False),
+        ("in_progress", False),
+        ("blocked", False),
+        ("completed", True),
+    ],
+)
+def test_completed_field_follows_status(client, status, completed):
+    task = add_task(client)
+
+    response = set_status(client, task["id"], status)
+
+    assert response.status_code == 200
+    assert response.get_json()["status"] == status
+    assert response.get_json()["completed"] is completed
+
+
+def test_complete_endpoint_sets_status(client):
+    task = add_task(client)
+    set_status(client, task["id"], "blocked")
+
+    response = client.put(f"/tasks/{task['id']}/complete")
+
+    assert response.get_json()["status"] == "completed"
+
+
+def test_completed_task_can_be_reopened(client):
+    task = add_task(client)
+    client.put(f"/tasks/{task['id']}/complete")
+
+    response = set_status(client, task["id"], "in_progress")
+
+    assert response.get_json()["completed"] is False
+
+
+def test_setting_completed_status_completes_sub_tasks(client):
+    parent = add_task(client, "Parent")
+    child = add_task(client, "Child", parent["id"])
+
+    set_status(client, parent["id"], "completed")
+
+    assert get_task(client, child["id"])["status"] == "completed"
+
+
+def test_other_statuses_do_not_change_sub_tasks(client):
+    parent = add_task(client, "Parent")
+    child = add_task(client, "Child", parent["id"])
+
+    set_status(client, parent["id"], "blocked")
+
+    assert get_task(client, child["id"])["status"] == "not_started"
+
+
+def test_reopening_a_main_task_leaves_sub_tasks_completed(client):
+    parent = add_task(client, "Parent")
+    child = add_task(client, "Child", parent["id"])
+    client.put(f"/tasks/{parent['id']}/complete")
+
+    set_status(client, parent["id"], "in_progress")
+
+    assert get_task(client, child["id"])["status"] == "completed"
+
+
+def test_reopening_a_sub_task_moves_completed_main_task_to_in_progress(client):
+    parent = add_task(client, "Parent")
+    child = add_task(client, "Child", parent["id"])
+    client.put(f"/tasks/{parent['id']}/complete")
+
+    set_status(client, child["id"], "blocked")
+
+    assert get_task(client, parent["id"])["status"] == "in_progress"
+
+
+def test_changing_a_sub_task_leaves_an_open_main_task_alone(client):
+    parent = add_task(client, "Parent")
+    child = add_task(client, "Child", parent["id"])
+    set_status(client, parent["id"], "blocked")
+
+    set_status(client, child["id"], "in_progress")
+
+    assert get_task(client, parent["id"])["status"] == "blocked"
+
+
+def test_adding_open_sub_task_to_completed_main_task_reopens_it(client):
+    parent = add_task(client, "Parent")
+    client.put(f"/tasks/{parent['id']}/complete")
+
+    add_task(client, "Child", parent["id"])
+
+    assert get_task(client, parent["id"])["status"] == "in_progress"
+
+
+def test_moving_open_task_under_completed_main_task_reopens_it(client):
+    parent = add_task(client, "Parent")
+    task = add_task(client, "Task")
+    client.put(f"/tasks/{parent['id']}/complete")
+
+    client.put(f"/tasks/{task['id']}/move", json={"parent_id": parent["id"]})
+
+    assert get_task(client, parent["id"])["status"] == "in_progress"
+
+
+def test_stats_split_pending_tasks_by_status(client):
+    for status in ["not_started", "in_progress", "in_progress", "blocked", "completed"]:
+        client.post("/tasks", json={"title": "Task", "status": status})
+
+    stats = client.get("/tasks/stats").get_json()
+
+    assert stats["pending"] == 4
+    assert stats["not_started"] == 1
+    assert stats["in_progress"] == 2
+    assert stats["blocked"] == 1
 
 
 def test_unknown_route_returns_json_404(client):

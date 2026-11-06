@@ -3,6 +3,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { useState } from 'react'
 import EditPanel from './EditPanel'
 import SortableList from './SortableList'
+import { STATUSES } from '../status'
 import TaskForm from './TaskForm'
 
 function TaskItem({ task, subTasks = [], mainTasks, busy, actions }) {
@@ -48,7 +49,19 @@ function TaskItem({ task, subTasks = [], mainTasks, busy, actions }) {
         <div className="task-text">
           <span className="task-title">{task.title}</span>
           <div className="task-meta">
-            <span className="task-status">{task.completed ? 'Completed' : 'Pending'}</span>
+            <select
+              className={`status-select status-${task.status}`}
+              aria-label={`Status of ${task.title}`}
+              disabled={busy}
+              value={task.status}
+              onChange={(event) => actions.setStatus(task.id, event.target.value)}
+            >
+              {STATUSES.map(({ value, label }) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
             <span className={`badge priority-${task.priority}`}>{task.priority}</span>
             {task.tag && <span className="badge tag">{task.tag}</span>}
           </div>

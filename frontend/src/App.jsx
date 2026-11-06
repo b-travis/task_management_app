@@ -65,6 +65,7 @@ function App() {
     add: (task) => runAction(() => createTask(task)),
     complete: (id) => runAction(() => completeTask(id)),
     remove: (id) => runAction(() => deleteTask(id)),
+    setStatus: (id, status) => runAction(() => updateTask(id, { status })),
     reorder: (task, index) => {
       setTasks((current) => placeAmongSiblings(current, task, index))
       return runAction(async () => {

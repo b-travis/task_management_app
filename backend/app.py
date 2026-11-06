@@ -9,6 +9,11 @@ MAX_TITLE_LENGTH = 200
 MAX_TAG_LENGTH = 30
 PRIORITIES = ("P0", "P1", "P2")  # P0 is the most urgent
 DEFAULT_PRIORITY = "P2"
+NOT_STARTED = "not_started"
+IN_PROGRESS = "in_progress"
+BLOCKED = "blocked"
+COMPLETED = "completed"
+STATUSES = (NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED)
 
 
 class TaskStore:
@@ -26,15 +31,15 @@ class TaskStore:
 
     def list(self):
         with self._lock:
-            return [dict(task) for task in self._tasks.values()]
+            return [self._view(task) for task in self._tasks.values()]
 
-    def add(self, title, priority=DEFAULT_PRIORITY, tag=None, parent_id=None):
+    def add(self, title, status=NOT_STARTED, priority=DEFAULT_PRIORITY, tag=None, parent_id=None):
         with self._lock:
             self._check_parent(None, parent_id)
             task = {
                 "id": self._next_id,
                 "title": title,
-                "completed": False,
+                "status": status,
                 "priority": priority,
                 "tag": self._reuse_tag(tag),
                 "parent_id": parent_id,
@@ -42,10 +47,11 @@ class TaskStore:
             self._tasks[task["id"]] = task
             # IDs only ever count up, so a deleted task's ID is never reused.
             self._next_id += 1
-            return dict(task)
+            self._reopen_parent_if_needed(task)
+            return self._view(task)
 
     def update(self, task_id, changes):
-        """Change a task's priority or tag. Returns None if it doesn't exist."""
+        """Change a task's status, priority, or tag. Returns None if it doesn't exist."""
         with self._lock:
             task = self._tasks.get(task_id)
             if task is None:
@@ -53,7 +59,9 @@ class TaskStore:
             if "tag" in changes:
                 changes = {**changes, "tag": self._reuse_tag(changes["tag"])}
             task.update(changes)
-            return dict(task)
+            if "status" in changes:
+                self._apply_status_rules(task)
+            return self._view(task)
 
     def move(self, task_id, parent_id, index=None):
         """Put a task under a parent (None for main tasks) at a position.
@@ -79,7 +87,8 @@ class TaskStore:
             else:
                 order.insert(order.index(siblings[index]), task_id)
             self._tasks = {other: self._tasks[other] for other in order}
-            return dict(task)
+            self._reopen_parent_if_needed(task)
+            return self._view(task)
 
     def complete(self, task_id):
         """Complete a task and its sub-tasks. Returns None if it doesn't exist."""
@@ -87,10 +96,9 @@ class TaskStore:
             task = self._tasks.get(task_id)
             if task is None:
                 return None
-            task["completed"] = True
-            for sub_task in self._sub_tasks(task_id):
-                sub_task["completed"] = True
-            return dict(task)
+            task["status"] = COMPLETED
+            self._apply_status_rules(task)
+            return self._view(task)
 
     def delete(self, task_id):
         """Delete a task and its sub-tasks. Returns False if it doesn't exist."""
@@ -101,6 +109,34 @@ class TaskStore:
                 del self._tasks[sub_task["id"]]
             del self._tasks[task_id]
             return True
+
+    @staticmethod
+    def _view(task):
+        """Return a copy for the API. Only status is stored, so the required
+        completed field is worked out here and can never disagree with it.
+        """
+        return {
+            "id": task["id"],
+            "title": task["title"],
+            "completed": task["status"] == COMPLETED,
+            "status": task["status"],
+            "priority": task["priority"],
+            "tag": task["tag"],
+            "parent_id": task["parent_id"],
+        }
+
+    def _apply_status_rules(self, task):
+        """Keep main tasks and sub-tasks consistent after a status change."""
+        if task["status"] == COMPLETED:
+            for sub_task in self._sub_tasks(task["id"]):
+                sub_task["status"] = COMPLETED
+        self._reopen_parent_if_needed(task)
+
+    def _reopen_parent_if_needed(self, task):
+        """A completed main task can't have open work under it."""
+        parent = self._tasks.get(task["parent_id"])
+        if parent and parent["status"] == COMPLETED and task["status"] != COMPLETED:
+            parent["status"] = IN_PROGRESS
 
     def _sub_tasks(self, task_id):
         return [t for t in self._tasks.values() if t["parent_id"] == task_id]
@@ -138,14 +174,18 @@ class TaskStore:
 
     def stats(self):
         with self._lock:
-            done = [task for task in self._tasks.values() if task["completed"]]
+            tasks = self._tasks.values()
+            done = [task for task in tasks if task["status"] == COMPLETED]
             sub_completed = sum(task["parent_id"] is not None for task in done)
             return {
-                "total": len(self._tasks),
+                "total": len(tasks),
                 "completed": len(done),
-                "pending": len(self._tasks) - len(done),
+                "pending": len(tasks) - len(done),
                 "main_completed": len(done) - sub_completed,
                 "sub_completed": sub_completed,
+                "not_started": sum(task["status"] == NOT_STARTED for task in tasks),
+                "in_progress": sum(task["status"] == IN_PROGRESS for task in tasks),
+                "blocked": sum(task["status"] == BLOCKED for task in tasks),
             }
 
 
@@ -172,6 +212,12 @@ def clean_title(payload):
     if len(title) > MAX_TITLE_LENGTH:
         raise BadRequest(f"Title cannot be longer than {MAX_TITLE_LENGTH} characters")
     return title
+
+
+def clean_status(status):
+    if status not in STATUSES:
+        raise BadRequest(f"Status must be one of: {', '.join(STATUSES)}")
+    return status
 
 
 def clean_priority(priority):
@@ -222,6 +268,7 @@ def create_app():
         payload = read_json_object()
         task = store.add(
             clean_title(payload),
+            status=clean_status(payload.get("status", NOT_STARTED)),
             priority=clean_priority(payload.get("priority", DEFAULT_PRIORITY)),
             tag=clean_tag(payload.get("tag")),
             parent_id=clean_id(payload.get("parent_id"), "parent_id"),
@@ -232,12 +279,14 @@ def create_app():
     def update_task(task_id):
         payload = read_json_object()
         changes = {}
+        if "status" in payload:
+            changes["status"] = clean_status(payload["status"])
         if "priority" in payload:
             changes["priority"] = clean_priority(payload["priority"])
         if "tag" in payload:
             changes["tag"] = clean_tag(payload["tag"])
         if not changes:
-            raise BadRequest("Provide a priority or tag to change")
+            raise BadRequest("Provide a status, priority, or tag to change")
 
         task = store.update(task_id, changes)
         if task is None:

@@ -17,7 +17,14 @@ function Stats({ stats }) {
         value={stats?.completed}
         detail={stats && `${stats.main_completed} main · ${stats.sub_completed} sub`}
       />
-      <Stat label="Pending" value={stats?.pending} />
+      <Stat
+        label="Pending"
+        value={stats?.pending}
+        detail={
+          stats &&
+          `${stats.not_started} not started · ${stats.in_progress} in progress · ${stats.blocked} blocked`
+        }
+      />
     </section>
   )
 }
