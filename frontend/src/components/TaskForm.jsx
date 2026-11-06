@@ -5,7 +5,7 @@ const MAX_TITLE_LENGTH = 200 // matches the limit in the backend
 const MAX_TAG_LENGTH = 30
 const DEFAULT_PRIORITY = 'P2'
 
-function TaskForm({ busy, onAdd }) {
+function TaskForm({ busy, onAdd, label = 'New task', submitLabel = 'Add task' }) {
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState(DEFAULT_PRIORITY)
   const [tag, setTag] = useState('')
@@ -29,17 +29,17 @@ function TaskForm({ busy, onAdd }) {
       <input
         className="title-input"
         type="text"
-        aria-label="New task title"
+        aria-label={`${label} title`}
         placeholder="What needs doing?"
         maxLength={MAX_TITLE_LENGTH}
         value={title}
         onChange={(event) => setTitle(event.target.value)}
       />
-      <PrioritySelect label="New task priority" value={priority} onChange={setPriority} />
+      <PrioritySelect label={`${label} priority`} value={priority} onChange={setPriority} />
       <input
         className="tag-input"
         type="text"
-        aria-label="New task tag"
+        aria-label={`${label} tag`}
         placeholder="Tag"
         list="tag-options"
         maxLength={MAX_TAG_LENGTH}
@@ -47,7 +47,7 @@ function TaskForm({ busy, onAdd }) {
         onChange={(event) => setTag(event.target.value)}
       />
       <button type="submit" className="primary" disabled={!canSubmit}>
-        Add task
+        {submitLabel}
       </button>
     </form>
   )

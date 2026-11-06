@@ -51,6 +51,10 @@ export function updateTask(id, changes) {
   return sendJson('PATCH', `/tasks/${id}`, changes)
 }
 
+export function moveTask(id, placement) {
+  return sendJson('PUT', `/tasks/${id}/move`, placement)
+}
+
 export function completeTask(id) {
   return request(`/tasks/${id}/complete`, { method: 'PUT' })
 }

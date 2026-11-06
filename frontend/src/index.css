@@ -111,6 +111,11 @@ button.primary:hover:not(:disabled) {
   color: rgba(255, 255, 255, 0.75);
 }
 
+.stat-detail {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.75rem;
+}
+
 .stat-label,
 .task-status,
 .message {
@@ -124,6 +129,7 @@ button.primary:hover:not(:disabled) {
 
 .task-form {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 1.5rem;
 }
@@ -139,7 +145,7 @@ select {
 }
 
 .task-form .title-input {
-  flex: 1;
+  flex: 1 1 12rem;
 }
 
 .tag-input {
@@ -171,6 +177,21 @@ select {
 
 .task {
   border-bottom: 1px solid var(--border);
+}
+
+.sub-task-list {
+  margin: 0;
+  padding: 0 0 0 1.75rem;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+
+.sub-task-list .task:last-child {
+  border-bottom: 0;
+}
+
+.sub-task-form {
+  margin: 0 0 0.75rem 1.75rem;
 }
 
 .task-row {

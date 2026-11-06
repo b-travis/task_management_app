@@ -6,6 +6,7 @@ import {
   getStats,
   getTags,
   getTasks,
+  moveTask,
   updateTask,
 } from './api'
 import Stats from './components/Stats'
@@ -51,6 +52,19 @@ function App() {
     }
   }
 
+  const actions = {
+    add: (task) => runAction(() => createTask(task)),
+    complete: (id) => runAction(() => completeTask(id)),
+    remove: (id) => runAction(() => deleteTask(id)),
+    save: (task, { priority, tag, parentId }) =>
+      runAction(async () => {
+        await updateTask(task.id, { priority, tag })
+        if (parentId !== task.parent_id) {
+          await moveTask(task.id, { parent_id: parentId })
+        }
+      }),
+  }
+
   return (
     <main>
       <header className="hero">
@@ -58,7 +72,7 @@ function App() {
         <Stats stats={stats} />
       </header>
 
-      <TaskForm busy={busy} onAdd={(task) => runAction(() => createTask(task))} />
+      <TaskForm busy={busy} onAdd={actions.add} />
 
       {/* Suggestions shared by every tag box on the page. */}
       <datalist id="tag-options">
@@ -78,15 +92,7 @@ function App() {
 
       {tasks === null && !error && <p className="message">Loading tasks…</p>}
 
-      {tasks !== null && (
-        <TaskList
-          tasks={tasks}
-          busy={busy}
-          onComplete={(id) => runAction(() => completeTask(id))}
-          onDelete={(id) => runAction(() => deleteTask(id))}
-          onUpdate={(id, changes) => runAction(() => updateTask(id, changes))}
-        />
-      )}
+      {tasks !== null && <TaskList tasks={tasks} busy={busy} actions={actions} />}
     </main>
   )
 }

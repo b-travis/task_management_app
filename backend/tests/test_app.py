@@ -11,8 +11,13 @@ def client():
     return create_app().test_client()
 
 
-def add_task(client, title="Write report"):
-    return client.post("/tasks", json={"title": title}).get_json()
+def add_task(client, title="Write report", parent_id=None):
+    payload = {"title": title, "parent_id": parent_id}
+    return client.post("/tasks", json=payload).get_json()
+
+
+def titles_in_order(client):
+    return [task["title"] for task in client.get("/tasks").get_json()]
 
 
 def test_health(client):
@@ -39,6 +44,7 @@ def test_create_task(client):
         "completed": False,
         "priority": "P2",
         "tag": None,
+        "parent_id": None,
     }
 
 
@@ -155,7 +161,13 @@ def test_stats_when_empty(client):
     response = client.get("/tasks/stats")
 
     assert response.status_code == 200
-    assert response.get_json() == {"total": 0, "completed": 0, "pending": 0}
+    assert response.get_json() == {
+        "total": 0,
+        "completed": 0,
+        "pending": 0,
+        "main_completed": 0,
+        "sub_completed": 0,
+    }
 
 
 def test_stats_track_changes(client):
@@ -167,7 +179,13 @@ def test_stats_track_changes(client):
 
     response = client.get("/tasks/stats")
 
-    assert response.get_json() == {"total": 2, "completed": 1, "pending": 1}
+    assert response.get_json() == {
+        "total": 2,
+        "completed": 1,
+        "pending": 1,
+        "main_completed": 1,
+        "sub_completed": 0,
+    }
 
 
 def test_create_task_with_priority_and_tag(client):
@@ -272,6 +290,216 @@ def test_tags_lists_tags_in_use(client):
 
     assert response.status_code == 200
     assert response.get_json() == ["Home", "work"]
+
+
+def test_create_sub_task(client):
+    parent = add_task(client, "Parent")
+
+    assert add_task(client, "Child", parent["id"])["parent_id"] == parent["id"]
+
+
+def test_create_sub_task_with_missing_parent_is_rejected(client):
+    response = client.post("/tasks", json={"title": "Child", "parent_id": 999})
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Parent task 999 not found"}
+    assert client.get("/tasks").get_json() == []
+
+
+def test_create_sub_task_of_a_sub_task_is_rejected(client):
+    parent = add_task(client, "Parent")
+    child = add_task(client, "Child", parent["id"])
+
+    response = client.post("/tasks", json={"title": "Grandchild", "parent_id": child["id"]})
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "A sub-task cannot have its own sub-tasks"}
+
+
+def test_move_makes_a_task_a_sub_task(client):
+    parent = add_task(client, "Parent")
+    task = add_task(client, "Task")
+
+    response = client.put(f"/tasks/{task['id']}/move", json={"parent_id": parent["id"]})
+
+    assert response.status_code == 200
+    assert response.get_json()["parent_id"] == parent["id"]
+
+
+def test_move_makes_a_sub_task_a_main_task(client):
+    parent = add_task(client, "Parent")
+    child = add_task(client, "Child", parent["id"])
+
+    response = client.put(f"/tasks/{child['id']}/move", json={"parent_id": None})
+
+    assert response.status_code == 200
+    assert response.get_json()["parent_id"] is None
+
+
+def test_move_to_own_task_is_rejected(client):
+    task = add_task(client)
+
+    response = client.put(f"/tasks/{task['id']}/move", json={"parent_id": task["id"]})
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "A task cannot be its own sub-task"}
+
+
+def test_move_under_a_sub_task_is_rejected(client):
+    parent = add_task(client, "Parent")
+    child = add_task(client, "Child", parent["id"])
+    task = add_task(client, "Task")
+
+    response = client.put(f"/tasks/{task['id']}/move", json={"parent_id": child["id"]})
+
+    assert response.status_code == 400
+    assert client.get("/tasks").get_json()[2]["parent_id"] is None
+
+
+def test_move_task_with_sub_tasks_under_another_is_rejected(client):
+    parent = add_task(client, "Parent")
+    add_task(client, "Child", parent["id"])
+    other = add_task(client, "Other")
+
+    response = client.put(f"/tasks/{parent['id']}/move", json={"parent_id": other["id"]})
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "error": "Move this task's sub-tasks before making it a sub-task"
+    }
+
+
+def test_task_with_sub_tasks_can_still_be_reordered(client):
+    parent = add_task(client, "Parent")
+    add_task(client, "Child", parent["id"])
+    add_task(client, "Other")
+
+    response = client.put(f"/tasks/{parent['id']}/move", json={"parent_id": None, "index": 1})
+
+    assert response.status_code == 200
+    assert titles_in_order(client) == ["Child", "Other", "Parent"]
+
+
+def test_move_missing_task_returns_404(client):
+    response = client.put("/tasks/999/move", json={"parent_id": None})
+
+    assert response.status_code == 404
+
+
+def test_move_requires_parent_id(client):
+    task = add_task(client)
+
+    response = client.put(f"/tasks/{task['id']}/move", json={"index": 0})
+
+    assert response.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"parent_id": "1"},
+        {"parent_id": True},
+        {"parent_id": None, "index": -1},
+        {"parent_id": None, "index": 1.5},
+    ],
+)
+def test_move_rejects_invalid_values(client, payload):
+    task = add_task(client)
+
+    response = client.put(f"/tasks/{task['id']}/move", json=payload)
+
+    assert response.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "index, expected",
+    [
+        (0, ["C", "A", "B"]),
+        (1, ["A", "C", "B"]),
+        (2, ["A", "B", "C"]),
+        (99, ["A", "B", "C"]),
+    ],
+)
+def test_move_reorders_main_tasks(client, index, expected):
+    add_task(client, "A")
+    add_task(client, "B")
+    last = add_task(client, "C")
+
+    client.put(f"/tasks/{last['id']}/move", json={"parent_id": None, "index": index})
+
+    assert titles_in_order(client) == expected
+
+
+def test_move_reorders_sub_tasks_within_their_parent(client):
+    parent = add_task(client, "Parent")
+    add_task(client, "First", parent["id"])
+    add_task(client, "Other main")
+    last = add_task(client, "Second", parent["id"])
+
+    client.put(f"/tasks/{last['id']}/move", json={"parent_id": parent["id"], "index": 0})
+
+    children = [
+        task["title"]
+        for task in client.get("/tasks").get_json()
+        if task["parent_id"] == parent["id"]
+    ]
+    assert children == ["Second", "First"]
+
+
+def test_completing_a_main_task_completes_its_sub_tasks(client):
+    parent = add_task(client, "Parent")
+    add_task(client, "Child", parent["id"])
+    add_task(client, "Other")
+
+    client.put(f"/tasks/{parent['id']}/complete")
+
+    statuses = {t["title"]: t["completed"] for t in client.get("/tasks").get_json()}
+    assert statuses == {"Parent": True, "Child": True, "Other": False}
+
+
+def test_completing_a_sub_task_leaves_its_parent_open(client):
+    parent = add_task(client, "Parent")
+    child = add_task(client, "Child", parent["id"])
+
+    client.put(f"/tasks/{child['id']}/complete")
+
+    assert client.get("/tasks").get_json()[0]["completed"] is False
+
+
+def test_deleting_a_main_task_deletes_its_sub_tasks(client):
+    parent = add_task(client, "Parent")
+    add_task(client, "Child", parent["id"])
+    add_task(client, "Other")
+
+    client.delete(f"/tasks/{parent['id']}")
+
+    assert titles_in_order(client) == ["Other"]
+
+
+def test_deleting_a_sub_task_keeps_its_parent(client):
+    parent = add_task(client, "Parent")
+    child = add_task(client, "Child", parent["id"])
+
+    client.delete(f"/tasks/{child['id']}")
+
+    assert titles_in_order(client) == ["Parent"]
+
+
+def test_stats_count_main_and_sub_tasks_separately(client):
+    first = add_task(client, "First")
+    add_task(client, "First child", first["id"])
+    second = add_task(client, "Second")
+    second_child = add_task(client, "Second child", second["id"])
+    client.put(f"/tasks/{first['id']}/complete")
+    client.put(f"/tasks/{second_child['id']}/complete")
+
+    assert client.get("/tasks/stats").get_json() == {
+        "total": 4,
+        "completed": 3,
+        "pending": 1,
+        "main_completed": 1,
+        "sub_completed": 2,
+    }
 
 
 def test_unknown_route_returns_json_404(client):
