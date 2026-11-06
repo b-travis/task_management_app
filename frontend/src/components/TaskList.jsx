@@ -12,6 +12,14 @@ function TaskItem({ task, subTasks = [], mainTasks, busy, actions }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id, disabled: busy })
 
+  async function handleAddSubTask(subTask) {
+    const added = await actions.add({ ...subTask, parent_id: task.id })
+    if (added) {
+      setAddingSubTask(false) // stays open after a failure so the text isn't lost
+    }
+    return added
+  }
+
   function handleDelete() {
     const count = subTasks.length
     const message = `Delete "${task.title}" and its ${count} sub-task${count === 1 ? '' : 's'}?`
@@ -100,7 +108,7 @@ function TaskItem({ task, subTasks = [], mainTasks, busy, actions }) {
             busy={busy}
             label={`Sub-task of ${task.title}`}
             submitLabel="Add sub-task"
-            onAdd={(subTask) => actions.add({ ...subTask, parent_id: task.id })}
+            onAdd={handleAddSubTask}
           />
         </div>
       )}
