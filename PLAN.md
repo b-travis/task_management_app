@@ -1,62 +1,59 @@
-# Plan: Carbon Arc Take-Home (Task Management App)
+# Project Plan: Task Management App
 
-**What you're building:** a small to-do app with three parts.
+**Scope:** a small task management app with three parts.
 
-| Part | What it does | Data science analogy |
+| Part | What it does | Think of it as |
 |---|---|---|
 | **Backend** (Python + Flask) | Stores tasks and answers requests such as "add this task" | A function library other programs can call over the network |
 | **Frontend** (React) | The web page people click on | A Streamlit page, but written in JavaScript |
 | **Docker** | Packages both parts so they run the same way on any computer | A `uv` lockfile that also includes the operating system and Python itself |
 
-**The finish line:** a reviewer clones your GitHub repo, runs `docker-compose up --build`, opens http://localhost:3000, and the app works.
+**Definition of done:** a reviewer clones the repository, runs `docker-compose up --build`, opens http://localhost:3000, and the app works.
 
-**Rough time:** 2.5 to 3 hours, including 20 to 30 minutes of one-time setup. The prompt says about 2 hours and that polish isn't the point, so stop adding extras when you reach your time limit.
+**Estimated time:** 2.5 to 3 hours, including 20 to 30 minutes of one-time setup. The prompt suggests about 2 hours, so extras should stop when the time limit is reached.
 
-**Using Claude Code:** AI is allowed, so each phase includes a prompt you can paste in. Read what it produces, though. You may be asked to walk through this code in a follow-up interview, so don't move on from a phase until you can explain it. The "Understand it" lines tell you what to focus on.
+**AI assistance:** the prompt allows AI, so each phase includes a prompt for an AI coding assistant. The "Understand it" notes list the key ideas from each phase.
 
 ---
 
 ## Progress checklist
 
-- [ ] Phase 0: Set up your Mac
+- [ ] Phase 0: Set up the environment
 - [ ] Phase 1: Create the folder structure
 - [ ] Phase 2: Build the backend
 - [ ] Phase 3: Build the frontend
 - [ ] Phase 4: Put it in Docker
-- [ ] Phase 5: Add a few impressive extras
+- [ ] Phase 5: Add optional extras
 - [ ] Phase 6: Write the README
 - [ ] Phase 7: Do a final test and submit
 
 ---
 
-## Phase 0: Set up your Mac (20 to 30 min)
+## Phase 0: Set up the environment (20 to 30 min)
 
-I checked your machine. `uv`, `git`, and `gh` are ready, and your GitHub repo is already connected. Three things need attention.
+The project needs `git`, `uv`, Docker Desktop, and Node.js. The steps below assume macOS, and other systems need equivalent steps.
 
-To run commands, open the terminal inside VS Code: menu bar → **Terminal → New Terminal**.
-
-### 1. Install Docker Desktop (missing)
+### 1. Install Docker Desktop
 
 1. Go to https://www.docker.com/products/docker-desktop/.
-2. Download the **Mac, Apple Silicon** version. Your Mac is Apple Silicon.
-3. Open the downloaded `.dmg` file and drag Docker into Applications.
-4. Open Docker from Applications and accept the prompts. A whale icon appears in the menu bar at the top right of your screen.
+2. Download the version for your computer's operating system and chip.
+3. Install it, then open Docker Desktop and accept the prompts.
 
-Docker must be running whenever you use it. If you see "Cannot connect to the Docker daemon," open the Docker app.
+Docker must be running whenever you use it. If you see "Cannot connect to the Docker daemon," open Docker Desktop.
 
-### 2. Install Node.js (missing)
+### 2. Install Node.js
 
-Node.js is to JavaScript what Python is to `.py` files, and `npm` is its version of `uv add`.
+Node.js is to JavaScript what Python is to `.py` files, and `npm` is its version of `uv add`. Install it from https://nodejs.org/ or with a package manager:
 
 ```bash
 brew install node
 ```
 
-### 3. Free up port 5000 (in use)
+### 3. Make sure port 5000 is free
 
-A *port* is a numbered door on your computer that a program listens on. The prompt requires port 5000, but a macOS system process (Control Center) is using it. This is almost certainly **AirPlay Receiver**, a well-known conflict on Macs.
+A *port* is a numbered door on a computer that a program listens on. The prompt requires port 5000. On macOS, the AirPlay Receiver feature commonly uses that port. To turn it off:
 
-1. Click the Apple menu  → **System Settings**.
+1. Open **System Settings**.
 2. Go to **General → AirDrop & Handoff**.
 3. Turn **AirPlay Receiver** off.
 
@@ -119,7 +116,7 @@ cd ..
 
 Next, ask Claude Code to create a top-level `.gitignore`. This file tells git what not to save, and it must include `node_modules/`, `.venv/`, and `__pycache__/`. Those folders are large and can be regenerated, so they don't belong in the repo.
 
-**Save your work.** A *commit* is a named checkpoint. Reviewers read your commit history, so committing at the end of each phase shows how you approached the work.
+**Save your work.** A *commit* is a named checkpoint. Committing at the end of each phase keeps a clear history of how the work progressed.
 
 ```bash
 git add .
@@ -150,7 +147,7 @@ uv run pytest
 uv run flask --app app run --port 5000
 ```
 
-Click the **+** in the VS Code terminal panel to open a second terminal, then run the examples from `Prompt.md`:
+Open a second terminal, then run the examples from `Prompt.md`:
 
 ```bash
 curl -X POST http://localhost:5000/tasks -H "Content-Type: application/json" -d '{"title": "Write report"}'
@@ -251,15 +248,15 @@ Commit.
 
 ---
 
-## Phase 5: Add a few impressive extras (20 to 30 min)
+## Phase 5: Add optional extras (20 to 30 min)
 
-The prompt invites you to impress them, but also says to keep styling minimal and not chase polish. Two or three well-finished extras will land better than many half-done ones. Do these in order and stop when time runs out.
+The prompt welcomes additional features, and also asks for minimal styling. A few well-finished extras are better than many partial ones. These were the initial ideas, in priority order. The features actually built are recorded in `Extensions.md`.
 
 | Priority | Extra | Why it's worth it |
 |---|---|---|
-| 1 | **Completion analytics:** add `created_at` and `completed_at` to tasks, then add completion rate and average time to complete to `/tasks/stats`, with a progress bar in the UI | Plays to your data background and is a memorable way to stand out |
+| 1 | **Completion analytics:** add `created_at` and `completed_at` to tasks, then add completion rate and average time to complete to `/tasks/stats`, with a progress bar in the UI | Adds useful insight into how work gets done |
 | 2 | **Filter buttons:** All, Pending, Completed | Small effort, and an obvious usability gain |
-| 3 | **GitHub Actions:** run the tests automatically on every push | Shows good engineering habits, and takes one short file |
+| 3 | **GitHub Actions:** run the tests automatically on every push | Catches problems early, and takes one short file |
 | 4 | **SQLite storage with a Docker volume:** tasks survive restarts | The biggest upgrade, but the most work, so skip it if you're short on time |
 
 Keep the original endpoints and fields working exactly as `Prompt.md` describes. Add new fields without changing or removing existing ones, because a reviewer may run their own checks against them.
@@ -270,14 +267,14 @@ Add a test for each backend extra, re-run `uv run pytest`, re-test with Docker, 
 
 ## Phase 6: Write the README (15 min)
 
-Replace or create `README.md` at the top level. Ask Claude Code for a first draft, then **rewrite the three question answers in your own words**, because they're where reviewers hear your thinking.
+Create `README.md` at the top level. An AI assistant can produce a first draft, but the three question answers should be written by the author.
 
 It must include:
 
 - **How to run it:** `docker-compose up --build`, then open http://localhost:3000, plus how to run the tests.
-- **Mac note:** if port 5000 is already in use, turn off AirPlay Receiver. A reviewer on a Mac may hit the same problem you did.
+- **Port note:** if port 5000 is already in use on macOS, turn off AirPlay Receiver.
 - **Assumptions and simplifications:**
-  - Data is in memory and is lost on restart (unless you did SQLite).
+  - Data is in memory and is lost on restart (unless SQLite was added).
   - There's a single Gunicorn worker, and why.
   - There are no user accounts or login.
   - Completing an already-completed task succeeds and changes nothing.
@@ -294,15 +291,15 @@ Commit.
 
 ## Phase 7: Do a final test and submit (15 min)
 
-"Works on my machine" is the most common way these projects fail, so test exactly what the reviewer will do, starting from a fresh copy.
+Test exactly what a reviewer will do, starting from a fresh copy of the repository.
 
 ```bash
 # In your project folder: stop anything still running
 docker-compose down
 
-# Make a fresh copy on your Desktop and run it
-cd ~/Desktop
-git clone https://github.com/b-travis/task_management_app.git test_copy
+# Make a fresh copy in a temporary folder and run it
+cd /path/to/temporary/folder
+git clone <repository-url> test_copy
 cd test_copy
 docker-compose up --build
 ```
@@ -319,21 +316,15 @@ To clean up, press `Ctrl+C`, then run:
 
 ```bash
 docker-compose down
-cd ~/Desktop
+cd /path/to/temporary/folder
 rm -rf test_copy
 ```
 
 **Before submitting:**
 
-1. Decide what to do with this file. Keeping `PLAN.md` in the repo is harmless, but you may prefer to delete it.
-2. Check whether the repo is public or private:
-
-   ```bash
-   gh repo view b-travis/task_management_app --json visibility
-   ```
-
-3. If it's private, give the reviewer access: on the repo's GitHub page, go to **Settings → Collaborators → Add people**. You'll need their GitHub username, so ask your Carbon Arc contact.
-4. Send them the link: https://github.com/b-travis/task_management_app
+1. Confirm the repository's visibility on GitHub.
+2. If it's private, give the reviewer access under **Settings → Collaborators**.
+3. Share the repository link.
 
 ---
 
@@ -341,9 +332,9 @@ rm -rf test_copy
 
 | Problem | Likely cause and fix |
 |---|---|
-| "Cannot connect to the Docker daemon" | Docker Desktop isn't open. Open it and wait for the whale icon. |
-| "Port is already allocated" or "address already in use" | Something else is on that port. Either AirPlay Receiver turned back on, or an earlier run is still going. Run `docker-compose down`, stop any local servers with `Ctrl+C`, and check `lsof -nP -iTCP:5000 -sTCP:LISTEN`. |
+| "Cannot connect to the Docker daemon" | Docker Desktop isn't open. Open it and wait for it to finish starting. |
+| "Port is already allocated" or "address already in use" | Something else is on that port. An earlier run may still be going, or another program may be using it, such as AirPlay Receiver on macOS. Run `docker-compose down`, stop any local servers with `Ctrl+C`, and check `lsof -nP -iTCP:5000 -sTCP:LISTEN`. |
 | The page loads but shows an error or no tasks | The frontend can't reach the backend. Run `docker-compose logs backend`, or paste the error into Claude Code. |
 | A code change doesn't appear in Docker | You need to rebuild. Stop it and run `docker-compose up --build` again. |
-| `npm` or `node` "command not found" | Close the terminal and open a new one. If that fails, re-run `brew install node`. |
-| You're stuck for more than 10 minutes | Paste the full error message into Claude Code and ask what it means. |
+| `npm` or `node` "command not found" | Close the terminal and open a new one. If that fails, reinstall Node.js. |
+| An error isn't clear | Paste the full error message into an AI assistant and ask what it means. |

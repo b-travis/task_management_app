@@ -149,6 +149,7 @@ Then open http://localhost:5173. The Vite development server forwards `/api` req
 ### What would you improve with 1 extra hour?
 
 - Save tasks in SQLite with a Docker volume, so they survive restarts. This would also remove the one-worker limit.
+- Add simple user accounts, so each person logs in and sees only their own tasks.
 - Let users edit titles.
 - Run the tests automatically with GitHub Actions.
 

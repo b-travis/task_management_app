@@ -296,6 +296,65 @@ That's about 60 minutes. Status goes first because the status filter depends on 
 
 ---
 
+## Next steps: Real storage and users
+
+None of this is built yet. It would be done on a separate branch, so the working version on `main` stays untouched. Storage comes first, because users need somewhere permanent to live.
+
+### How to choose storage
+
+Pick the level based on the problem to solve:
+
+| Need | What it takes |
+|---|---|
+| Tasks survive a restart | Saved storage, such as SQLite |
+| More than one server process | A database that handles simultaneous writes well |
+| Many users at once, or several servers | A database server such as Postgres |
+| Changing the data structure safely over time | Migrations, which are versioned scripts that update the tables |
+
+SQLite is the right next step. It's a real SQL database stored in one file, with no extra service to run. Postgres comes later, once there are real users or several servers.
+
+### Step 1: Move tasks to SQLite
+
+All storage goes through the `TaskStore` class in `backend/app.py`, so the API routes and the React frontend shouldn't need to change.
+
+```sql
+CREATE TABLE tasks (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    title     TEXT NOT NULL,
+    status    TEXT NOT NULL DEFAULT 'not_started',
+    priority  TEXT NOT NULL DEFAULT 'P2',
+    tag       TEXT,
+    parent_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+    position  INTEGER NOT NULL
+);
+```
+
+- **Ordering:** the new `position` column replaces today's reliance on dict order. This is the fiddliest part of the change.
+- **Sub-task rules:** `ON DELETE CASCADE` handles deleting sub-tasks. The status and nesting rules stay in Python.
+- **Thread lock:** database transactions replace it, and the one-worker limit can go. SQLite still handles only one write at a time, which is fine at this size.
+- **Docker:** a named volume keeps the database file when containers are replaced.
+- **Tests:** each test uses its own temporary database.
+
+Rough time: about an hour, including re-testing.
+
+**Keeping a demo fresh:** `docker-compose down` keeps tasks, and `docker-compose down -v` wipes them by deleting the volume.
+
+### Step 2: Add simple users
+
+- **Data:** a `users` table with an ID, a unique username, and a hashed password, plus a `user_id` column on `tasks`. Passwords are never stored as plain text.
+- **Login:** register, log in, and log out endpoints, using a session cookie. The browser only talks to one address, so cookies work simply here.
+- **Pages:** a login and sign-up page in front of the task list.
+- **Separation:** each person sees only their own tasks, tags, and stats. Asking for someone else's task returns a 404, so the API doesn't reveal that it exists. A sub-task's parent must belong to the same user.
+
+**A decision to make first:** requiring login would make the brief's sample `curl` commands return a 401 error, because they don't log in. Either keep a guest user for requests with no login, or accept the change and update the README. Keeping a guest user would protect the original API.
+
+### Step 3: Later, if the app grows
+
+- Move from SQLite to Postgres as a new service in Docker Compose.
+- Add migrations with Alembic, so table changes are tracked and repeatable.
+
+---
+
 ## Out of scope for now
 
 - Text search.
@@ -305,4 +364,4 @@ That's about 60 minutes. Status goes first because the status filter depends on 
 - Dragging a task onto another to nest it.
 - Multiple tags per task, or tag renaming and colors.
 - Undo for deleting.
-- Saving tasks across backend restarts.
+- Saving tasks across backend restarts, and user accounts. See [Next steps](#next-steps-real-storage-and-users).
