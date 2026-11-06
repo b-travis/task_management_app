@@ -102,7 +102,7 @@ task_management_app/
 Run these from the project folder:
 
 ```bash
-uv init backend
+uv init --no-package backend
 cd backend
 uv add flask gunicorn
 uv add --dev pytest
@@ -113,6 +113,7 @@ npm install
 cd ..
 ```
 
+- **`--no-package`** keeps the backend as a plain folder of Python files. Without it, uv sets the project up as an installable package, which this app doesn't need.
 - **Vite** is the standard tool for starting a React project. If it asks any questions, accept the defaults.
 - **Gunicorn** is a production-grade server for Flask. Flask's built-in server is only meant for development.
 
