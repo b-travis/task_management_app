@@ -1,6 +1,6 @@
 # Extensions: Making the App More Interesting
 
-This is the plan for the app's new features. Round 1 (features 1 to 5) is built and on GitHub. Round 2 (features 6 and 7) is [planned below](#round-2-completion-status-and-filters) and not built yet. The README's final answers are parked until these are done.
+This is the record of the app's new features. Round 1 (features 1 to 5) is built and on GitHub. Round 2 (features 6 and 7) is also built and on GitHub. The README's final answers are parked until these are done.
 
 **The goal:** add these within about an hour without breaking anything the prompt requires.
 
@@ -202,7 +202,7 @@ That's about 70 minutes, before you write the README answers. If time runs short
 
 ### Decisions needed
 
-These are recommendations and haven't been agreed yet.
+These are the agreed answers. One rule was added while building: decision 14 also applies when an open task is added or moved under a completed main task.
 
 | # | Question | Recommendation | Why |
 |---|---|---|---|
