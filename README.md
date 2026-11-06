@@ -154,4 +154,8 @@ Then open http://localhost:5173. The Vite development server forwards `/api` req
 
 ## AI usage
 
-I used Claude Code to help plan, write, and test this project, and I reviewed the code it produced.
+I used Claude Code to help plan, write, and test this project.
+
+Given the time constraints, I did not review the code directly. Instead, I reviewed the app through its UI and APIs.
+
+I designed most of the add-on features, deciding what to build and how each one should behave, and implemented them with Claude.
