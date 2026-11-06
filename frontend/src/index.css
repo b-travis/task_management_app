@@ -252,6 +252,22 @@ select {
   font-size: 0.875rem;
 }
 
+.task-row .drag-handle {
+  padding: 0.25rem;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.task.dragging {
+  position: relative;
+  z-index: 1;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 13, 48, 0.2);
+}
+
 .task-text {
   display: flex;
   flex: 1;

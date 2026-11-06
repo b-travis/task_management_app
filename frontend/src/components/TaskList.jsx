@@ -1,11 +1,16 @@
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useState } from 'react'
 import EditPanel from './EditPanel'
+import SortableList from './SortableList'
 import TaskForm from './TaskForm'
 
 function TaskItem({ task, subTasks = [], mainTasks, busy, actions }) {
   const [editing, setEditing] = useState(false)
   const [addingSubTask, setAddingSubTask] = useState(false)
   const isMainTask = task.parent_id === null
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+    useSortable({ id: task.id, disabled: busy })
 
   function handleDelete() {
     const count = subTasks.length
@@ -16,8 +21,22 @@ function TaskItem({ task, subTasks = [], mainTasks, busy, actions }) {
   }
 
   return (
-    <li className={task.completed ? 'task completed' : 'task'}>
+    <li
+      ref={setNodeRef}
+      className={`task${task.completed ? ' completed' : ''}${isDragging ? ' dragging' : ''}`}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+    >
       <div className="task-row">
+        <button
+          ref={setActivatorNodeRef}
+          type="button"
+          className="drag-handle"
+          {...attributes}
+          {...listeners}
+          aria-label={`Reorder ${task.title}`}
+        >
+          ⠿
+        </button>
         <div className="task-text">
           <span className="task-title">{task.title}</span>
           <div className="task-meta">
@@ -87,7 +106,7 @@ function TaskItem({ task, subTasks = [], mainTasks, busy, actions }) {
       )}
 
       {subTasks.length > 0 && (
-        <ul className="sub-task-list">
+        <SortableList items={subTasks} className="sub-task-list" onReorder={actions.reorder}>
           {subTasks.map((subTask) => (
             <TaskItem
               key={subTask.id}
@@ -97,7 +116,7 @@ function TaskItem({ task, subTasks = [], mainTasks, busy, actions }) {
               actions={actions}
             />
           ))}
-        </ul>
+        </SortableList>
       )}
     </li>
   )
@@ -112,7 +131,7 @@ function TaskList({ tasks, busy, actions }) {
   const mainTasks = tasks.filter((task) => task.parent_id === null)
 
   return (
-    <ul className="task-list">
+    <SortableList items={mainTasks} className="task-list" onReorder={actions.reorder}>
       {mainTasks.map((task) => (
         <TaskItem
           key={task.id}
@@ -123,7 +142,7 @@ function TaskList({ tasks, busy, actions }) {
           actions={actions}
         />
       ))}
-    </ul>
+    </SortableList>
   )
 }
 

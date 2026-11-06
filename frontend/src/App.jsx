@@ -13,6 +13,15 @@ import Stats from './components/Stats'
 import TaskForm from './components/TaskForm'
 import TaskList from './components/TaskList'
 
+// Puts a task at a new position among the tasks at its level, matching what the
+// backend does, so a drop can show on screen before the backend has answered.
+function placeAmongSiblings(tasks, moved, index) {
+  const others = tasks.filter((task) => task.id !== moved.id)
+  const siblings = others.filter((task) => task.parent_id === moved.parent_id)
+  const position = index < siblings.length ? others.indexOf(siblings[index]) : others.length
+  return [...others.slice(0, position), moved, ...others.slice(position)]
+}
+
 function App() {
   const [tasks, setTasks] = useState(null) // null until the first load succeeds
   const [stats, setStats] = useState(null)
@@ -56,6 +65,17 @@ function App() {
     add: (task) => runAction(() => createTask(task)),
     complete: (id) => runAction(() => completeTask(id)),
     remove: (id) => runAction(() => deleteTask(id)),
+    reorder: (task, index) => {
+      setTasks((current) => placeAmongSiblings(current, task, index))
+      return runAction(async () => {
+        try {
+          await moveTask(task.id, { parent_id: task.parent_id, index })
+        } catch (err) {
+          await refresh() // undo the on-screen move if it couldn't be saved
+          throw err
+        }
+      })
+    },
     save: (task, { priority, tag, parentId }) =>
       runAction(async () => {
         await updateTask(task.id, { priority, tag })
