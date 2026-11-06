@@ -43,9 +43,10 @@ function App() {
 
   return (
     <main>
-      <h1>Task Manager</h1>
-
-      <Stats stats={stats} />
+      <header className="hero">
+        <h1>Task Manager</h1>
+        <Stats stats={stats} />
+      </header>
 
       <TaskForm busy={busy} onAdd={(title) => runAction(() => createTask(title))} />
 
