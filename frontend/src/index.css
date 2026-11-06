@@ -128,12 +128,22 @@ button.primary:hover:not(:disabled) {
   margin-bottom: 1.5rem;
 }
 
-.task-form input {
-  flex: 1;
+input,
+select {
   min-width: 0;
   padding: 0.4rem 0.75rem;
+  font: inherit;
+  background: #fff;
   border: 1px solid var(--border);
   border-radius: var(--radius);
+}
+
+.task-form .title-input {
+  flex: 1;
+}
+
+.tag-input {
+  width: 8rem;
 }
 
 .error {
@@ -160,11 +170,65 @@ button.primary:hover:not(:disabled) {
 }
 
 .task {
+  border-bottom: 1px solid var(--border);
+}
+
+.task-row {
   display: flex;
   gap: 0.5rem;
   align-items: center;
   padding: 0.6rem 0;
-  border-bottom: 1px solid var(--border);
+}
+
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.badge {
+  padding: 0 0.45rem;
+  font: 700 0.75rem/1.5 var(--mono);
+  border-radius: 4px;
+}
+
+.priority-P0 {
+  color: #7d3500;
+  background: #ffe3d3;
+}
+
+.priority-P1 {
+  color: #7a5200;
+  background: #ffd795;
+}
+
+.priority-P2 {
+  color: #57534e;
+  background: var(--surface);
+}
+
+.tag {
+  color: #00268f;
+  background: #ccd9fc;
+}
+
+.edit-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  background: var(--surface);
+  border-radius: var(--radius);
+}
+
+.edit-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.875rem;
 }
 
 .task-text {

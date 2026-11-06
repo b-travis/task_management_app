@@ -3,9 +3,12 @@
 from threading import Lock
 
 from flask import Flask, jsonify, request
-from werkzeug.exceptions import HTTPException, NotFound
+from werkzeug.exceptions import BadRequest, HTTPException, NotFound
 
 MAX_TITLE_LENGTH = 200
+MAX_TAG_LENGTH = 30
+PRIORITIES = ("P0", "P1", "P2")  # P0 is the most urgent
+DEFAULT_PRIORITY = "P2"
 
 
 class TaskStore:
@@ -25,12 +28,29 @@ class TaskStore:
         with self._lock:
             return [dict(task) for task in self._tasks.values()]
 
-    def add(self, title):
+    def add(self, title, priority=DEFAULT_PRIORITY, tag=None):
         with self._lock:
-            task = {"id": self._next_id, "title": title, "completed": False}
+            task = {
+                "id": self._next_id,
+                "title": title,
+                "completed": False,
+                "priority": priority,
+                "tag": self._reuse_tag(tag),
+            }
             self._tasks[task["id"]] = task
             # IDs only ever count up, so a deleted task's ID is never reused.
             self._next_id += 1
+            return dict(task)
+
+    def update(self, task_id, changes):
+        """Change a task's priority or tag. Returns None if it doesn't exist."""
+        with self._lock:
+            task = self._tasks.get(task_id)
+            if task is None:
+                return None
+            if "tag" in changes:
+                changes = {**changes, "tag": self._reuse_tag(changes["tag"])}
+            task.update(changes)
             return dict(task)
 
     def complete(self, task_id):
@@ -47,6 +67,22 @@ class TaskStore:
         with self._lock:
             return self._tasks.pop(task_id, None) is not None
 
+    def tags(self):
+        with self._lock:
+            return sorted(self._tags_in_use(), key=str.lower)
+
+    def _tags_in_use(self):
+        return {task["tag"] for task in self._tasks.values() if task["tag"]}
+
+    def _reuse_tag(self, tag):
+        """Use an existing tag's spelling, so "work" and "Work" stay one tag."""
+        if tag is None:
+            return None
+        for existing in self._tags_in_use():
+            if existing.lower() == tag.lower():
+                return existing
+        return tag
+
     def stats(self):
         with self._lock:
             total = len(self._tasks)
@@ -58,23 +94,48 @@ class TaskStore:
             }
 
 
-def validate_title(payload):
-    """Return (title, None) if the payload is valid, or (None, error message)."""
+def read_json_object():
+    """Return the request's JSON body, or reject it if it isn't a JSON object."""
+    # silent=True returns None for bad JSON, so it gets this same error format.
+    payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
-        return None, "Request body must be a JSON object"
+        raise BadRequest("Request body must be a JSON object")
+    return payload
+
+
+def clean_title(payload):
     if "title" not in payload:
-        return None, "Title is required"
+        raise BadRequest("Title is required")
 
     title = payload["title"]
     if not isinstance(title, str):
-        return None, "Title must be a string"
+        raise BadRequest("Title must be a string")
 
     title = title.strip()
     if not title:
-        return None, "Title cannot be blank"
+        raise BadRequest("Title cannot be blank")
     if len(title) > MAX_TITLE_LENGTH:
-        return None, f"Title cannot be longer than {MAX_TITLE_LENGTH} characters"
-    return title, None
+        raise BadRequest(f"Title cannot be longer than {MAX_TITLE_LENGTH} characters")
+    return title
+
+
+def clean_priority(priority):
+    if priority not in PRIORITIES:
+        raise BadRequest(f"Priority must be one of: {', '.join(PRIORITIES)}")
+    return priority
+
+
+def clean_tag(tag):
+    """Return a tidied tag, or None for no tag. A blank tag counts as no tag."""
+    if tag is None:
+        return None
+    if not isinstance(tag, str):
+        raise BadRequest("Tag must be a string")
+
+    tag = tag.strip()
+    if len(tag) > MAX_TAG_LENGTH:
+        raise BadRequest(f"Tag cannot be longer than {MAX_TAG_LENGTH} characters")
+    return tag or None
 
 
 def create_app():
@@ -93,12 +154,29 @@ def create_app():
 
     @app.post("/tasks")
     def create_task():
-        # silent=True returns None for bad JSON, so validate_title can reject it
-        # with the same error format as every other validation problem.
-        title, error = validate_title(request.get_json(silent=True))
-        if error:
-            return jsonify(error=error), 400
-        return jsonify(store.add(title)), 201
+        payload = read_json_object()
+        task = store.add(
+            clean_title(payload),
+            priority=clean_priority(payload.get("priority", DEFAULT_PRIORITY)),
+            tag=clean_tag(payload.get("tag")),
+        )
+        return jsonify(task), 201
+
+    @app.patch("/tasks/<int:task_id>")
+    def update_task(task_id):
+        payload = read_json_object()
+        changes = {}
+        if "priority" in payload:
+            changes["priority"] = clean_priority(payload["priority"])
+        if "tag" in payload:
+            changes["tag"] = clean_tag(payload["tag"])
+        if not changes:
+            raise BadRequest("Provide a priority or tag to change")
+
+        task = store.update(task_id, changes)
+        if task is None:
+            raise NotFound(f"Task {task_id} not found")
+        return jsonify(task)
 
     @app.put("/tasks/<int:task_id>/complete")
     def complete_task(task_id):
@@ -116,6 +194,10 @@ def create_app():
     @app.get("/tasks/stats")
     def task_stats():
         return jsonify(store.stats())
+
+    @app.get("/tags")
+    def list_tags():
+        return jsonify(store.tags())
 
     @app.errorhandler(HTTPException)
     def handle_http_error(error):

@@ -31,12 +31,24 @@ export function getStats() {
   return request('/tasks/stats')
 }
 
-export function createTask(title) {
-  return request('/tasks', {
-    method: 'POST',
+export function getTags() {
+  return request('/tags')
+}
+
+function sendJson(method, path, body) {
+  return request(path, {
+    method,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title }),
+    body: JSON.stringify(body),
   })
+}
+
+export function createTask(task) {
+  return sendJson('POST', '/tasks', task)
+}
+
+export function updateTask(id, changes) {
+  return sendJson('PATCH', `/tasks/${id}`, changes)
 }
 
 export function completeTask(id) {

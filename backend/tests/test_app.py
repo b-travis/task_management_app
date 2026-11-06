@@ -2,7 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from app import MAX_TITLE_LENGTH, create_app
+from app import MAX_TAG_LENGTH, MAX_TITLE_LENGTH, create_app
 
 
 @pytest.fixture
@@ -33,7 +33,13 @@ def test_create_task(client):
     response = client.post("/tasks", json={"title": "Write report"})
 
     assert response.status_code == 201
-    assert response.get_json() == {"id": 1, "title": "Write report", "completed": False}
+    assert response.get_json() == {
+        "id": 1,
+        "title": "Write report",
+        "completed": False,
+        "priority": "P2",
+        "tag": None,
+    }
 
 
 def test_created_tasks_are_listed_in_order(client):
@@ -162,6 +168,110 @@ def test_stats_track_changes(client):
     response = client.get("/tasks/stats")
 
     assert response.get_json() == {"total": 2, "completed": 1, "pending": 1}
+
+
+def test_create_task_with_priority_and_tag(client):
+    response = client.post(
+        "/tasks", json={"title": "Ship it", "priority": "P0", "tag": "  Work  "}
+    )
+
+    assert response.status_code == 201
+    assert response.get_json()["priority"] == "P0"
+    assert response.get_json()["tag"] == "Work"
+
+
+@pytest.mark.parametrize("priority", ["P3", "p0", "", None, 1])
+def test_invalid_priority_is_rejected(client, priority):
+    response = client.post("/tasks", json={"title": "Task", "priority": priority})
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Priority must be one of: P0, P1, P2"}
+
+
+def test_non_string_tag_is_rejected(client):
+    response = client.post("/tasks", json={"title": "Task", "tag": 5})
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Tag must be a string"}
+
+
+def test_tag_over_max_length_is_rejected(client):
+    response = client.post(
+        "/tasks", json={"title": "Task", "tag": "x" * (MAX_TAG_LENGTH + 1)}
+    )
+
+    assert response.status_code == 400
+
+
+def test_blank_tag_means_no_tag(client):
+    response = client.post("/tasks", json={"title": "Task", "tag": "   "})
+
+    assert response.get_json()["tag"] is None
+
+
+def test_matching_tag_reuses_existing_spelling(client):
+    client.post("/tasks", json={"title": "First", "tag": "Work"})
+
+    response = client.post("/tasks", json={"title": "Second", "tag": "work"})
+
+    assert response.get_json()["tag"] == "Work"
+
+
+def test_update_priority_and_tag(client):
+    task = add_task(client)
+
+    response = client.patch(
+        f"/tasks/{task['id']}", json={"priority": "P1", "tag": "Home"}
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {**task, "priority": "P1", "tag": "Home"}
+
+
+def test_update_can_clear_a_tag(client):
+    task = client.post("/tasks", json={"title": "Task", "tag": "Home"}).get_json()
+
+    response = client.patch(f"/tasks/{task['id']}", json={"tag": None})
+
+    assert response.get_json()["tag"] is None
+
+
+def test_update_only_changes_the_fields_sent(client):
+    task = client.post(
+        "/tasks", json={"title": "Task", "priority": "P0", "tag": "Home"}
+    ).get_json()
+
+    response = client.patch(f"/tasks/{task['id']}", json={"priority": "P1"})
+
+    assert response.get_json()["tag"] == "Home"
+
+
+def test_update_with_nothing_to_change_is_rejected(client):
+    task = add_task(client)
+
+    response = client.patch(f"/tasks/{task['id']}", json={"title": "New"})
+
+    assert response.status_code == 400
+
+
+def test_update_missing_task_returns_404(client):
+    response = client.patch("/tasks/999", json={"priority": "P1"})
+
+    assert response.status_code == 404
+    assert response.get_json() == {"error": "Task 999 not found"}
+
+
+def test_tags_lists_tags_in_use(client):
+    client.post("/tasks", json={"title": "A", "tag": "work"})
+    client.post("/tasks", json={"title": "B", "tag": "Home"})
+    third = client.post("/tasks", json={"title": "C", "tag": "Old"}).get_json()
+    client.post("/tasks", json={"title": "D"})
+    client.delete(f"/tasks/{third['id']}")
+
+    response = client.get("/tags")
+
+    assert response.status_code == 200
+    assert response.get_json() == ["Home", "work"]
 
 
 def test_unknown_route_returns_json_404(client):
